@@ -1,37 +1,73 @@
 #include <iostream>
-#include <omp.h>
+#include <vector>
+#include <ctime>
+//#include <omp.h>
 
-void test(){
-    for (int i=0;i<10;i++){
-        std::cout<<"in test: "<< i <<std::endl;
+using namespace std;
+
+int calculate_output_size(int input_size, int filter_size){
+    return (input_size - filter_size ) + 1;
+}
+
+vector<vector<int>> solve_conv2(const vector<vector<int>>& input,
+                                const vector<vector<int>> weight,
+                                int num_thread){
+    int input_height = input.size(), input_width = input[0].size();
+    int weight_height = weight.size(), weight_width = weight[0].size();
+    int output_height = calculate_output_size(input_height, input_width);
+    int output_width = calculate_output_size(input_width, output_width);
+    vector<vector<int>> res(output_height, vector<int>(output_width));
+    
+    int i, j, m, n;
+    
+    omp_set_dynamic(0); //关闭OpenMP动态调整线程数
+    clock_t start_time, end_time;
+    start_time = clock();
+    //告诉OpenMP启动num_thread个线程执行下面区块中的逻辑。
+    #pragma omp parallel shared(input,weight,res) private(i,j,m,n) num_threads(num_thread)
+    {
+        for (i = 0; i < output_height; i++){
+            for (j = 0; j < output_width; j++){
+                int sum = 0;
+                for(m = 0; m < weight_height; m++){
+                    for(n = 0; n <weight_width; n++){
+                        if((i+m) >= 0 && (i+m) < input_height && (j+n) >= 0 && (j+n) <  input_width){
+                            sum += weight[m][n] * input[i+m][j+n];
+                        }
+                    }
+                }
+                res[i][j] = sum;
+            }
+        }
     }
+    end_time = clock();
+    
+    //TODO:使用其他代码段耗时工具类，对计算能力的提升进行统计。
+    std::cout<<"paralle time: "<<end_time - start_time <<std::endl;
+
+    return res;
+}
+
+
+//随机的生成矩阵,用于测试
+vector<vector<int>> randomVec(int n){
+    if (n <= 0){
+        return {};
+    }
+    
+    vector<vector<int>> res(n, vector<int>(n));
+    //.....生成矩阵的代码
+    return res;
 }
 
 int main(){
-    float startTime = omp_get_wtime();
-//parallel for用于生成一个并行域，并将计算任务在多个线程之间分配，从而加快计算运行的速度。可以让系统默认分配线程个数，也可以使用num_threads子句指定线程个数。
-// 指定3个线程
-#pragma omp parallel for num_threads(3)
-    for (int i=0;i<10;i++){
-        test();
+    int inputN , weightN, num_thread;
+    std::cout<<"input the size of input and weight, the tread num"<<std::endl;
+    
+    while(scanf("%d%d%d", &inputN, &weightN, &num_thread)){
+        auto input = randomVec(inputN);
+        auto weight =randomVec(weightN);
+        solve_conv2(input, weight, num_thread);
     }
-    
-    float endTime = omp_get_wtime();
-    std::cout<<"run time: "<< endTime - startTime;
     return 0;
-}
-
-//section语句是用在sections语句里用来将sections语句里的代码划分成几个不同的段，每段都并行执行。
-void sectionExample(){
-#pragma omp parallel sections {
-#pragma omp section
-    std::cout<<"section 1 threadID: "<< omp_get_thread_num();
- #pragma omp section
-    std::cout<<"section 2 threadID: "<< omp_get_thread_num();
-#pragma omp section
-    std::cout<<"section 3 threadID: "<< omp_get_thread_num();
-#pragma omp section
-    std::cout<<"section 4 threadID: "<< omp_get_thread_num();
-    
-    return ;
 }
